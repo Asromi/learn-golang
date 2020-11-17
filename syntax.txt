@@ -1,12 +1,31 @@
 rOmi RnD
 
+=== issue ========================================================================================
+GoLang
+buat environment variable di golang
 
-=== restAPI========================================================================================
-0. handle return data arry byte for internal api, grtconfig & translog
-1. cann`t catch SQL error SQL [1/0]; SQL return 2 result, empty rows and 1 row information catch message; apps can handle first result only.
 
+restAPI
+1. MsSQLServer - handle return data array byte for internal api, getconfig & translog
+                          - cann`t catch SQL error SQL [1/0]; SQL return 2 result, empty rows and 1 row information catch message; apps can handle first result only.
+2. redis - standard key 
+             - pipeline with auth
+             - connect api to redis with config
+             - overcommit memory config
+3. elasticsearch - config production
+
+
+kubernetes
+1. replicaset nat port
+2. HARBOR Local Registry
+3. learn Api Gatewey & Load Balancer
 
 === ssh ==========================================================================================
+cat /etc/os-release
+hostnamectl
+cat /proc/cpuinfo
+cat /proc/meminfo
+
 cd ..
 man su
 su asromi
@@ -17,14 +36,49 @@ rmdir FOLDERNAME
 nano FILENAME.ext
 vi
 
+=== restAPI ==========================================================================================
+POST:   x.com:port/{prefix}/{app}/{entity}
+
+body parameter
+1. default 
+----------------------------------------------------------------
+{
+  "token": "tkdevApp",
+  "function": "apiCOREtemplateevent",
+  "attributes": {
+         "userID": "asromi",
+         "id": "sMenu"
+         }
+}
+----------------------------------------------------------------
+
+
+2. setbulk 
+----------------------------------------------------------------
+{
+  "token": "tkdevApp",
+  "function": "apiCOREtemplateevent",
+  "attributes": {
+         "userID": "asromi",
+         "id": "iBulk"
+         },
+  "type": "setbulk",
+  "data": [
+		  { "no": "1", "descr": "aku" },
+		  { "no": "2", "descr": "bisa" }
+		  ]
+}
+----------------------------------------------------------------
+
 === docker =======================================================================================
 -- nyalain dulu engine dockernya
 
-docker images
+docker images | sort -k5 -h
+docker images --format "{{.ID}}\t{{.Size}}\t{{.Repository}}:{{.Tag}}" | sort -k5 -h
 docker pull IMAGE_NAME:tag
 docker image rm -f IMAGE_ID IMAGE_ID 
 
-docker ps
+docker ps grep KEYWORD
 docker container ls -a
 docker container start/stop CONTAINER_ID
 docker container rm -f CONTAINER_ID CONTAINER_ID
@@ -32,6 +86,7 @@ docker containes logs CONTAINER_NAME
 
 -->sebelum build file go; eksekusi dulu command **; push coding to github; IMAGE_NAME disesuaikan dengan nama repo kalian di dockerhub; account/repo:tag
 docker build . -t IMAGE_NAME:tag
+docker tag IMAGE_NAME:tag harbor.jec.co.id/namaaplikasi/namamodul:version
 
 docker run -d -p IP:HOST_PORT:SRV_PORT --net NETWORK_NAME --name CONTAINER_NAME IMAGE_NAME:tag
 
@@ -39,6 +94,9 @@ docker container inspect CONTAINER_NAME
 
 docker login
 docker push IMAGE_NAME:tag
+
+docker login harbor.jec.co.id
+docker push harbor.jec.co.id/namaaplikasi/nammodul
 
 docker volume ls
 docker volume create VOLUME_NAME
@@ -53,6 +111,10 @@ docker-compose -f docker-compose.yml up -d
 
 docker system df
 
+docker exec -ti containerNAME /bin/sh
+cat << EOF > /etc/hosts
+
+docker exec containerNAME1 ping containerNAME2 -c2
 
 ==>Dockerfile==MultyStage
 ------------------------------------------------------------------------------------
@@ -63,14 +125,15 @@ WORKDIR /go/src/restapi
 RUN go get restapi && \
     go install && \
     go build -o engine main.go
-EXPOSE 80
+EXPOSE 443
 
 ## Distribution 
 FROM alpine:latest AS runtime
-LABEL maintainer="Asromi rOmi <looknext.982111@gmail.com>"
+LABEL app="restapi" version="2.0" maintainer="Asromi rOmi"
+ENV serverport="443" dbapp="MSSQL" dbcache="redis"
 RUN mkdir /lib64 && ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
 WORKDIR /go/src/restapi
-EXPOSE 80
+EXPOSE 443
 COPY --from=builder /go/src/restapi/engine /go/src/restapi
 CMD ./engine 
 ------------------------------------------------------------------------------------
@@ -93,6 +156,7 @@ services:
       - cache
     environment:
       WAIT_HOSTS: redis:6379
+
 
   redis:
     image: redis:6.0
@@ -121,8 +185,22 @@ networks:
 
 
 === kubernetes ====================================================================================
+install docker : https://runnable.com/docker/install-docker-on-linux
+add group access, set auto run on boot
+install docker-compose : https://docs.docker.com/compose/install/
+
+install kubernetes : kubelet, kubectl, kubeadm
+https://www.tecmint.com/install-kubernetes-cluster-on-centos-7/
+kubeadm join 172.16.20.181:6443 --token v2of26.j2p99pfe2109aqpo --discovery-token-ca-cert-hash sha256:ac150bb8e6f252e2e875c23a7d78aad7cb992beb779b2e933403aabb7654caed
+
+install nginx :
+https://www.tecmint.com/deploy-nginx-on-a-kubernetes-cluster/
+------------------------------------------------------------------------------------
 --Pastiin servernya jalan ya..
 kubectl version
+kubectl get deployments
+kubectl get svc
+
 ----namespace--------------------------------------------------
 kubectl get namespace -o wide --show-labels
 kubectl describe namespace namespaceNAME
@@ -277,11 +355,21 @@ spec:
 
 
 === go ==========================================================================================
-Arahin dulu Pathnya { PS C:\me\Development\GoLang\GOPATH\src\github.com\asromi\GoLang\restapi> }
+cat fileNAME
+git push
+git push origin master
 
+run go Arahin dulu Pathnya { PS C:\me\Development\GoLang\GOPATH\src\github.com\asromi\GoLang\restapi> }
 go run main.go mssql.go
 
 **
+reOpen VS --> hapus isi di "go mod" dan "go sum"
+go clean -modcache
+go mod init
+go test
+go mod tidy
+
+go generate
 go install
 go build
 go build -o main . 
@@ -291,6 +379,10 @@ docker run -d -p IP:HOST_PORT:SRV_PORT --net NETWORK_NAME \
         -e CONFIG=valCONFIG \
         --name CONTAINER_NAME IMAGE_NAME:tag
 
+
+rP = "server=172.16.20.xx;user id=apigo;Password=sapi.Api;database=api"
+rP = "server=.;user id=sa;Password=sapi.db;database=api"
+rP = "127.0.0.1:6300" //"172.16.20.75:6300" // // "localhost:6300"
 
 
 === redis =========================================================================================
@@ -335,6 +427,10 @@ decr "key"
 incrby "key" incrementNumber
 decrby "key" decrementNumber
 
+---------------------------- pipeline
+#cd /usr/local/etc/command
+cat sets.txt | redis-cli --pipe
+
 ---------------------------- transaction
 multy
 ---your code
@@ -363,14 +459,18 @@ ACL GENPASS
 
 auth userNAME passWORD
 
+AuthACL(ctx context.Context, username, password string) *StatusCmd
 --> copy aja dari default( https://github.com/antirez/redis/blob/6.0/redis.conf )
 -->, kmudian ubah beberapa config ini:
 -----------------------------------------------------------------------------
 ---- SECURITY
+#romi
 user default on +@connection
-user sadis on +@all ~* >4dm1n://redis.io/topics/acl
-user uRead on +@read ~* >r34d.redis
-user uReWrite on +@read +@write +@set ~* >r3wr1t3.redis 
+user asromi on +@all ~* >ganteng
+user sadis on +@all ~* >sapi.redis
+user uRead on +@read ~* >sapi.redis
+user uReWrite on +@read +@write +@set ~* >sapi.redis 
+
 
 ---- SNAPSHOTTING
 bgsave 3600 500
@@ -388,8 +488,17 @@ lfu-log-factor 10
 lfu-decay-time 1
 
 
+---------------------------- connect redis from other machine
+1. pastiin connect ke server
+2. running redis di local docker
+3. masuk ke redis
+   docker exec -it containerNAME /bin/bash
+4. connect ke dbredis server
+   redis-cli -h 172.16.20.75 -p 6300
+5. authorize user;
+   auth userID password
 
------------------------------------------------------------------------------
+-------------------------------------------------------------------
 
 
 ==>docker-compose.yml
@@ -406,6 +515,9 @@ services:
     volumes:
       - ./config/redis.conf:/usr/local/etc/redis/redis.conf
       - ./command:/usr/local/etc/command
+    extra_hosts:
+      - "svc.jec.go.id:172.16.80.81"
+      - "msv.jec.go.id:172.16.80.81"
 
 networks:
   default:

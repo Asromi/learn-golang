@@ -9,7 +9,7 @@ func fBasicCode() {
 
 	fmt.Println("=====================================")
 	fmt.Println(">> belajar func add, di helper ( 2 + 3 ) ")
-	fmt.Println(Add(2, 3))
+	//fmt.Println(Add(2, 3))
 
 	fmt.Println("=====================================")
 	fmt.Println(">> belajar query, conn to 20.88")
