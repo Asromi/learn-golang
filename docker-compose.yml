@@ -1,0 +1,12 @@
+version: "3"
+services:
+  core:
+    image: asromi/svc:procurement
+    container_name: svcprocurement
+    ports:
+      - 4214:443
+
+networks:
+  default:
+    external:
+      name: netapp

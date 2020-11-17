@@ -1,0 +1,487 @@
+rOmi RnD
+
+
+=== restAPI========================================================================================
+0. handle return data arry byte for internal api, grtconfig & translog
+1. cann`t catch SQL error SQL [1/0]; SQL return 2 result, empty rows and 1 row information catch message; apps can handle first result only.
+
+
+=== ssh ==========================================================================================
+cd ..
+man su
+su asromi
+
+mkdir FOLDERNAME
+rmdir FOLDERNAME
+
+nano FILENAME.ext
+vi
+
+=== docker =======================================================================================
+-- nyalain dulu engine dockernya
+
+docker images
+docker pull IMAGE_NAME:tag
+docker image rm -f IMAGE_ID IMAGE_ID 
+
+docker ps
+docker container ls -a
+docker container start/stop CONTAINER_ID
+docker container rm -f CONTAINER_ID CONTAINER_ID
+docker containes logs CONTAINER_NAME
+
+-->sebelum build file go; eksekusi dulu command **; push coding to github; IMAGE_NAME disesuaikan dengan nama repo kalian di dockerhub; account/repo:tag
+docker build . -t IMAGE_NAME:tag
+
+docker run -d -p IP:HOST_PORT:SRV_PORT --net NETWORK_NAME --name CONTAINER_NAME IMAGE_NAME:tag
+
+docker container inspect CONTAINER_NAME
+
+docker login
+docker push IMAGE_NAME:tag
+
+docker volume ls
+docker volume create VOLUME_NAME
+docker volume inspect VOLUME_NAME
+
+docker network ls
+docker network create NETWORK_NAME
+docker volume inspect NETWORK_NAME
+
+docker-compose version
+docker-compose -f docker-compose.yml up -d
+
+docker system df
+
+
+==>Dockerfile==MultyStage
+------------------------------------------------------------------------------------
+## Builder 
+FROM golang:1.13.6 AS builder
+ADD . /go/src/restapi
+WORKDIR /go/src/restapi
+RUN go get restapi && \
+    go install && \
+    go build -o engine main.go
+EXPOSE 80
+
+## Distribution 
+FROM alpine:latest AS runtime
+LABEL maintainer="Asromi rOmi <looknext.982111@gmail.com>"
+RUN mkdir /lib64 && ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
+WORKDIR /go/src/restapi
+EXPOSE 80
+COPY --from=builder /go/src/restapi/engine /go/src/restapi
+CMD ./engine 
+------------------------------------------------------------------------------------
+
+
+==>docker-compose.yml
+------------------------------------------------------------------------------------
+version: "3"
+services:
+  core:
+    image: asromi/svc:core
+    container_name: svccore
+    ports:
+      - 4200:443
+    links:
+      - redis
+      - cache
+    depends_on:
+      - redis
+      - cache
+    environment:
+      WAIT_HOSTS: redis:6379
+
+  redis:
+    image: redis:6.0
+    container_name: dbredis
+    hostname: dbredis
+    ports:
+      - 6379:6379
+    volumes:
+      - vredis:/var/lib/redis
+    restart:
+      always
+  
+  cache:
+    image: redis:6.0
+    container_name: cacherediscore
+
+volumes:
+  vredis:
+    external: true 
+networks:
+  default:
+    external:
+      name: netapp
+------------------------------------------------------------------------------------
+
+
+
+=== kubernetes ====================================================================================
+--Pastiin servernya jalan ya..
+kubectl version
+----namespace--------------------------------------------------
+kubectl get namespace -o wide --show-labels
+kubectl describe namespace namespaceNAME
+kubectl create -f resourceNAME.yaml
+
+----node--------------------------------------------------------
+kubectl get node -o wide --show-labels -n namespaceNAME
+kubectl describe node nodeNAME
+kubectl create -f resourceNAME.yaml -n namespaceNAME
+kubectl delete node nodeNAME nodeNAME2
+
+----pod----------------------------------------------------------
+kubectl get pod -o wide --show-labels -n namespaceNAME
+kubectl describe pod podNAME
+kubectl create -f resourceNAME.yaml -n namespaceNAME
+kubectl delete pod podNAME podNAME2
+kubectl delete pod -l key=value
+kubectl delete pod --all -n namespaceNAME
+
+->query search pod with label
+kubectl get pod -l key
+kubectl get pod -l key=value
+kubectl get pod -l '!key'
+kubectl get pod -l key!=value
+kubectl get pod -l 'key notin (value1, value2)'
+kubectl get pod -l key, key2=value2, key3-value3
+
+----ReplicationController----------------------------------------
+kubectl get rc -o wide --show-labels
+kubectl describe rc rcNAME
+kubectl create -f resourceNAME.yaml
+kubectl delete rc resourceNAME.yaml --casecade=false
+
+----ReplicaSet----------------------------------------------------
+kubectl get rs -o wide --show-labels
+kubectl describe rs rsNAME
+kubectl create -f resourceNAME.yaml
+kubectl delete rs resourceNAME.yaml --casecade=false
+
+
+----add atribute on running resource--------------------------
+->most recomended to write atribute on configurationFile.yaml
+kubectl label pod podNAME key=value --overwrite
+kubectl annotate pod podNAME key="value" --overwrite
+
+
+----syntac create resource --------------------------------------
+kubectl create -f resourceNAME.yaml -n namespaceNAME
+
+==>resourceNAME.yaml;   RESOURCE := { namespace, node, pod, ReplicationController, ReplicationSet }
+-> formatnya sama, perbedaan di file confignya; 
+1. ( kind: RESOURCE );  
+2. spec cma ada di pod, ReplicationController, ReplicationSet
+------------------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Pod
+metadata:
+  name: nginx
+  labels:
+    team: finance
+    version: 1.4.5
+    environment: production
+  annotations:
+    description: Ini adalah aplikasi yang dibuat oleh tim product
+    apapun: Apapun itu....
+
+
+-->POD
+----------------------------
+spec:  
+  containers:
+    - name: nginx
+      image: nginx
+      ports:
+        - containerPort: 80
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 80
+        initialDelaySeconds: 3
+        periodSeconds: 30
+        timeoutSeconds: 2
+        successThreshold: 1
+        failureThreshold: 3
+
+
+--> ReplicationController 
+----------------------------
+spec:
+  replicas: 3
+  selector:
+    app: nginx
+  template:
+    metadata:
+      name: nama-pod
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: container-name
+          image: image-name
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+            timeoutSeconds: 1
+
+
+--> ReplicaSet
+----------------------------
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - nginx
+          - api
+      - key: env
+        operator: In
+        values:
+          - prod
+          - dev
+  template:
+    metadata:
+      name: nginx
+      labels:
+        app: nginx
+        env: prod
+    spec:
+      containers:
+        - name: nginx
+          image: nginx
+          ports:
+            - containerPort: 80
+
+------------------------------------------------------------------------------------
+
+
+
+=== go ==========================================================================================
+Arahin dulu Pathnya { PS C:\me\Development\GoLang\GOPATH\src\github.com\asromi\GoLang\restapi> }
+
+go run main.go mssql.go
+
+**
+go install
+go build
+go build -o main . 
+go build -o engine main.go
+
+docker run -d -p IP:HOST_PORT:SRV_PORT --net NETWORK_NAME \
+        -e CONFIG=valCONFIG \
+        --name CONTAINER_NAME IMAGE_NAME:tag
+
+
+
+=== redis =========================================================================================
+--> pastikan image redisnya jalan di docker dulu, dan docker network & volume buat redis sudah disiapkan
+
+docker run -d -p 6379:6379 -v vredis:/data --net netapp --name dbredis redis:latest
+
+---------------------------- get into redis cli
+1.
+docker run -it --net netapp --rm redis redis-cli -h dbredis 
+2.
+docker exec -ti dbredis /bin/bash
+redis-cli
+
+---------------------------- CRUD 
+ping
+select 0
+
+exists "key"
+keys *patternkey*
+
+get "key"
+set "key" "value"
+append "key" "value"
+
+mget "key" "key" 
+mset "key" "value" "key" "value"
+
+getrange "key" start end
+setrange "key" start "value"
+
+del "key" "key"
+expire "key" second
+ttl "key"
+setex "key" second "value"
+flushdb
+flushall
+dbsize
+
+incr "key"
+decr "key"
+incrby "key" incrementNumber
+decrby "key" decrementNumber
+
+---------------------------- transaction
+multy
+---your code
+exec
+discard
+---------------------------- server monitor
+monitor
+info
+config help
+slowlog help
+---------------------------- clientmonitor
+client list
+client id
+client kill ip:port
+---------------------------- persistance
+save
+bgsave
+
+----------------------------  redis.conf
+https://redis.io/commands/config-get
+
+ACL LIST
+ACL GETUSER userNAME
+ACL CAT
+ACL GENPASS
+
+auth userNAME passWORD
+
+--> copy aja dari default( https://github.com/antirez/redis/blob/6.0/redis.conf )
+-->, kmudian ubah beberapa config ini:
+-----------------------------------------------------------------------------
+---- SECURITY
+user default on +@connection
+user sadis on +@all ~* >4dm1n://redis.io/topics/acl
+user uRead on +@read ~* >r34d.redis
+user uReWrite on +@read +@write +@set ~* >r3wr1t3.redis 
+
+---- SNAPSHOTTING
+bgsave 3600 500
+
+---- CLIENTS
+maxclients 10000
+
+---- MEMORY MANAGEMENT
+maxmemory 2000mb
+maxmemory-samples 3
+maxmemory-policy volatile-lfu
+
+---- ADVANCED CONFIG
+lfu-log-factor 10
+lfu-decay-time 1
+
+
+
+-----------------------------------------------------------------------------
+
+
+==>docker-compose.yml
+------------------------------------------------------------------------------------
+version: "3"
+services:
+  redis:
+    container_name: dbredis
+    image: redis:6.0
+    hostname: dbredis
+    command: redis-server /usr/local/etc/redis/redis.conf
+    ports:
+      - 6379:6379
+    volumes:
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./command:/usr/local/etc/command
+
+networks:
+  default:
+    external:
+      name: netapp
+------------------------------------------------------------------------------------
+
+
+
+=== elasticsearch ===================================================================================
+--> pastikan image ES-nya jalan di docker dulu, dan docker network & 3volume buat ES sudah disiapkan, docker compose
+
+docker pull docker.elastic.co/elasticsearch/elasticsearch:7.6.2
+docker run -d -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" docker.elastic.co/elasticsearch/elasticsearch:7.6.2
+
+
+
+=== mongo ========================================================================================
+--> pastikan image mongonya jalan di docker dulu, dan docker network & volume buat mongo sudah disiapkan
+
+development
+---------------
+docker run -d -p 27017:27017 -v vmongo:/data/db --net netapp --name dbmongo mongo:latest
+
+docker exec -it dbmongo bash
+docker logs dbmongo 
+
+
+production
+------------
+docker run -d -p 27017:27017 -v vmongo:/data/db --net netapp \
+        -e MONGO_INITDB_ROOT_USERNAME=mongoadmin \
+        -e MONGO_INITDB_ROOT_PASSWORD=secret \
+        --name dbmongo mongo:latest
+
+docker run -it --rm --net netapp mongo \
+        mongo -h dbmongo \
+        -u mongoadmin \
+        -p secret \
+        --authenticationDatabase admin \
+        dbmongo 
+
+
+
+=== neo4j ========================================================================================
+--> pastikan image neo4jnya jalan di docker dulu, dan docker network & volume buat neo4j sudah disiapkan
+
+development
+--------------
+docker run -p 7474:7474 -p 7687:7687 -v=vneo4j:/data -v=logneo4j:/logs --net netapp \
+        --env=NEO4J_AUTH=none \
+        --name dbneo4j neo4j:latest
+
+production
+------------
+docker run -p 7473:7473 -p 7687:7687 -v=dbneo4j:/data -v=logneo4j:/logs --net netapp \
+         --env NEO4J_AUTH=neo4j/your_password \
+         --name dbneo4j neo4j:latest
+
+
+
+=== cassandra =====================================================================================
+--> pastikan image cassandranya jalan di docker dulu, dan docker network & volume buat cassandra sudah disiapkan
+
+development
+--------------
+docker run -d -p 7000:7000 -v=vcassandra:/var/lib/cassandra --net netapp --name dbcassandra cassandra:latest
+
+production
+------------
+docker run -d -p 7000:7000 -v=vcassandra:/var/lib/cassandra --net netapp \
+         -e CASSANDRA_SEEDS=some-cassandra \
+         --name dbcassandra  cassandra:latest
+
+docker run -it --net netapp --rm cassandra cqlsh dbcassandra
+docker exec -it dbcassandra bash
+docker logs dbcassandra
+
+===============================================================================================
